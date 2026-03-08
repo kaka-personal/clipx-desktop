@@ -347,7 +347,7 @@ function refreshTrayMenu() {
     { label: "清空历史", click: clearHistory },
     { label: "清空当前剪贴板", click: clearClipboard },
     { type: "separator" },
-    { label: "退出", click: () => app.quit() }
+    { label: "退出", click: requestQuit }
   ];
 
   pluginHost.runHook("onMenuBuilding", { template });
@@ -583,6 +583,15 @@ function toggleMonitoring() {
   isMonitoringPaused = !isMonitoringPaused;
   refreshTrayMenu();
   notifyWindows();
+}
+
+function requestQuit() {
+  isQuitting = true;
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
+  app.quit();
 }
 
 function createTray() {

@@ -2,12 +2,42 @@
   "name": "clipx-desktop",
   "version": "0.1.0",
   "description": "A ClipX-inspired clipboard manager for Windows.",
+  "author": "Kaka",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
   },
   "license": "MIT",
   "devDependencies": {
-    "electron": "^36.0.0"
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.kaka.clipxdesktop",
+    "productName": "ClipX Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "ClipX-Desktop-${version}-Portable.${ext}"
+    }
   }
 }
