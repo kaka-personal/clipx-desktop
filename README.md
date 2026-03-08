@@ -2,7 +2,7 @@
 
 ClipX Desktop 是一个面向 Windows 的剪贴板管理工具，灵感来自经典的 ClipX，使用 Electron 构建。
 
-本项目目标不是逐字节复刻老版 ClipX，而是在现代 Windows 环境下提供接近 ClipX 使用体验的开源实现。
+本项目的目标不是逐字节复刻老版 ClipX，而是在现代 Windows 环境下提供接近 ClipX 使用体验的开源实现。
 
 ## 特性
 
@@ -20,9 +20,15 @@ ClipX Desktop 是一个面向 Windows 的剪贴板管理工具，灵感来自经
 - 托盘图标切换
 - Windows 安装版与便携版打包
 
-## 截图说明
+## 界面预览
 
-当前仓库未单独整理截图资源，如需展示图，可从运行中的应用自行补充到仓库。
+设置面板：
+
+![设置面板](docs/settings-panel.png)
+
+快速历史列表：
+
+![快速历史列表](docs/popup-list.png)
 
 ## 开发环境
 
@@ -71,6 +77,7 @@ C:\Users\<用户名>\AppData\Roaming\clipx-desktop
 ```text
 assets/         图标、声音等静态资源
 build/          打包阶段脚本
+docs/           README 截图资源
 src/main.js     Electron 主进程
 src/preload.js  预加载桥接
 src/renderer/   界面层
@@ -89,7 +96,7 @@ src/renderer/   界面层
 
 你需要保留原始版权声明和许可证文本。
 
-如果你希望未来增加更强的专利保护或更明确的企业使用条款，可以再改成 Apache-2.0，但当前这个项目更适合从 MIT 起步。
+如果以后你希望增加更强的专利保护或更明确的企业使用条款，可以再改成 Apache-2.0，但当前这个项目更适合从 MIT 起步。
 
 ## 贡献
 
