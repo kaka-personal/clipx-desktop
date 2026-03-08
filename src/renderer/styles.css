@@ -163,6 +163,40 @@ textarea { font: inherit; }
 .sound-button {
   padding: 8px 10px;
 }
+.tray-icon-row {
+  display: grid;
+  grid-template-columns: auto 44px 54px 44px minmax(90px, 1fr);
+  align-items: center;
+}
+.tray-icon-nav {
+  padding: 8px 10px;
+}
+.tray-icon-preview {
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+}
+.tray-icon-preview img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.tray-icon-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #d8d1c4;
+}
+.tray-icon-name {
+  color: var(--muted);
+  font-size: 13px;
+}
 .settings-inline-actions {
   margin-top: 12px;
 }

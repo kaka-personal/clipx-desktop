@@ -9,6 +9,7 @@ const state = {
   search: "",
   selectedIds: [],
   activeClipId: null,
+  pendingTrayIcon: null,
   pinnedEditor: {
     id: null,
     title: "",
@@ -65,16 +66,22 @@ function isBuiltinSoundValue(value) {
   return typeof value === "string" && value.startsWith("builtin:");
 }
 
-function findPopupItemById(clipId) {
-  const items = [...(state.app?.history || []), ...(state.app?.pinned || [])];
-  return items.find((item) => item.id === clipId) || null;
+function getTrayIconOptions() {
+  return state.app?.trayIconOptions || [];
+}
+
+function getCurrentTrayIconValue() {
+  return state.pendingTrayIcon || state.app?.config?.trayIcon || getTrayIconOptions()[0]?.value || "";
+}
+
+function getCurrentTrayIconOption() {
+  return getTrayIconOptions().find((option) => option.value === getCurrentTrayIconValue()) || getTrayIconOptions()[0] || null;
 }
 
 function visibleItems() {
   if (!state.app) {
     return [];
   }
-
   if (state.currentTab === "collections") {
     return state.app.collections;
   }
@@ -87,21 +94,27 @@ function visibleItems() {
   if (!query) {
     return source;
   }
-
   return source.filter((item) => JSON.stringify(item).toLowerCase().includes(query));
 }
 
+function findPopupItemById(clipId) {
+  const items = [...(state.app?.history || []), ...(state.app?.pinned || [])];
+  return items.find((item) => item.id === clipId) || null;
+}
+
 function renderSidebar() {
+  const tabs = [
+    { id: "history", label: "历史" },
+    { id: "pinned", label: "常驻片段" },
+    { id: "collections", label: "集合" },
+    { id: "settings", label: "设置" }
+  ];
+
   return `
     <div class="sidebar">
       <p class="section-title">视图</p>
       <div class="tab-list">
-        ${[
-          { id: "history", label: "历史" },
-          { id: "pinned", label: "常驻片段" },
-          { id: "collections", label: "集合" },
-          { id: "settings", label: "设置" }
-        ].map((tab) => `
+        ${tabs.map((tab) => `
           <button class="tab-button ${state.currentTab === tab.id ? "active" : ""}" data-tab="${tab.id}">
             ${tab.label}
           </button>
@@ -191,6 +204,8 @@ function renderPinnedEditor() {
 }
 
 function renderSettings() {
+  const currentTrayIcon = getCurrentTrayIconOption();
+
   return `
     <div class="main">
       <p class="section-title">通用</p>
@@ -234,6 +249,16 @@ function renderSettings() {
           <input id="soundFileCustom" type="text" value="${escapeHtml(isBuiltinSoundValue(state.app.config.soundFile) ? "" : (state.app.config.soundFile || ""))}" placeholder="自定义 wav 文件路径">
         </div>
         <label class="settings-check"><input id="showTrayIcon" type="checkbox" ${state.app.config.showTrayIcon ? "checked" : ""}> 在系统托盘显示图标</label>
+        <div class="settings-row tray-icon-row">
+          <label class="settings-label" for="trayIcon">托盘图标：</label>
+          <button class="action-button tray-icon-nav" data-action="tray-icon-prev">&lt;</button>
+          <div class="tray-icon-preview">
+            ${currentTrayIcon?.previewUrl ? `<img src="${escapeHtml(currentTrayIcon.previewUrl)}" alt="${escapeHtml(currentTrayIcon.label)}">` : '<div class="tray-icon-placeholder"></div>'}
+          </div>
+          <button class="action-button tray-icon-nav" data-action="tray-icon-next">&gt;</button>
+          <span class="tray-icon-name">${escapeHtml(currentTrayIcon?.label || "default")}</span>
+          <input id="trayIcon" type="hidden" value="${escapeHtml(getCurrentTrayIconValue())}">
+        </div>
         <label class="settings-check"><input id="runOnStartup" type="checkbox" ${state.app.config.runOnStartup ? "checked" : ""}> 开机启动 ClipX</label>
       </div>
       <p class="section-title">高级</p>
@@ -295,11 +320,9 @@ function renderMain() {
   if (currentView === "popup") {
     return renderPopupList();
   }
-
   if (state.currentTab === "settings") {
     return renderSettings();
   }
-
   if (state.currentTab === "pinned") {
     const items = visibleItems();
     return `
@@ -309,7 +332,6 @@ function renderMain() {
       </div>
     `;
   }
-
   if (state.currentTab === "collections") {
     const collections = visibleItems();
     return `
@@ -354,6 +376,7 @@ function readSettingsForm() {
   const selectedPaste = document.querySelector('input[name="pasteStrategy"]:checked');
   const soundPreset = byId("soundPreset").value;
   const soundFileCustom = byId("soundFileCustom").value.trim();
+
   return {
     maxHistory: Number(byId("maxHistory").value),
     pollIntervalMs: Number(byId("pollIntervalMs").value),
@@ -368,6 +391,7 @@ function readSettingsForm() {
     playSoundOnCapture: byId("playSoundOnCapture").checked,
     soundFile: soundPreset && soundPreset !== "__custom__" ? soundPreset : soundFileCustom,
     showTrayIcon: byId("showTrayIcon").checked,
+    trayIcon: state.pendingTrayIcon || byId("trayIcon").value,
     runOnStartup: byId("runOnStartup").checked,
     hotkeys: {
       togglePopup: byId("togglePopupKey").value.trim(),
@@ -414,6 +438,7 @@ async function handleAction(button) {
     await window.clipx.removeCollection(id);
   } else if (action === "save-settings") {
     await window.clipx.updateSettings(readSettingsForm());
+    state.pendingTrayIcon = null;
   } else if (action === "preview-sound") {
     const settings = readSettingsForm();
     if (!settings.soundFile) {
@@ -426,7 +451,12 @@ async function handleAction(button) {
     if (!result?.canceled && result?.path) {
       byId("soundPreset").value = "__custom__";
       byId("soundFileCustom").value = result.path;
+      syncSoundControls();
     }
+  } else if (action === "tray-icon-prev") {
+    shiftTrayIcon(-1);
+  } else if (action === "tray-icon-next") {
+    shiftTrayIcon(1);
   } else if (action === "toggle-monitoring") {
     await window.clipx.toggleMonitoring();
   } else if (action === "clear-history") {
@@ -516,6 +546,18 @@ function syncSoundControls() {
   customInput.disabled = preset.value !== "__custom__";
 }
 
+function shiftTrayIcon(step) {
+  const options = getTrayIconOptions();
+  if (!options.length) {
+    return;
+  }
+  const currentValue = byId("trayIcon")?.value || getCurrentTrayIconValue();
+  const currentIndex = Math.max(0, options.findIndex((option) => option.value === currentValue));
+  const nextIndex = (currentIndex + step + options.length) % options.length;
+  state.pendingTrayIcon = options[nextIndex].value;
+  render();
+}
+
 function wireEvents() {
   const input = byId("searchInput");
   if (input && currentView !== "popup") {
@@ -579,6 +621,7 @@ async function init() {
 
   window.clipx.onStateUpdated((nextState) => {
     state.app = nextState;
+    state.pendingTrayIcon = null;
     if (!state.pinnedEditor.id) {
       state.pinnedEditor = { id: null, title: "", text: "" };
     }

@@ -8,6 +8,7 @@ const { execFile } = require("child_process");
 
 const APP_NAME = "ClipX Desktop";
 const TRAY_ICON_PATH = path.join(__dirname, "..", "assets", "tray-icon.png");
+const TRAY_ICON_DIR_PATH = path.join(__dirname, "..", "assets", "tray-icons");
 const SOUND_DIR_PATH = path.join(__dirname, "..", "assets", "sounds");
 const PINNED_SHORTCUT_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const DEFAULT_CONFIG = {
@@ -25,6 +26,7 @@ const DEFAULT_CONFIG = {
   playSoundOnCapture: true,
   soundFile: "builtin:click.wav",
   showTrayIcon: true,
+  trayIcon: "builtin:amber-clip.png",
   runOnStartup: true,
   hotkeys: {
     togglePopup: "CommandOrControl+Shift+V",
@@ -61,6 +63,22 @@ function getBuiltinSoundOptions() {
     }));
 }
 
+function getBuiltinTrayIconOptions() {
+  if (!fs.existsSync(TRAY_ICON_DIR_PATH)) {
+    return [];
+  }
+
+  return fs.readdirSync(TRAY_ICON_DIR_PATH)
+    .filter((file) => /\.(ico|png)$/i.test(file))
+    .sort((a, b) => a.localeCompare(b))
+    .map((file) => ({
+      value: `builtin:${file}`,
+      label: path.parse(file).name,
+      fileName: file,
+      previewUrl: pathToFileURL(path.join(TRAY_ICON_DIR_PATH, file)).href
+    }));
+}
+
 function resolveSoundFile(soundFile) {
   if (!soundFile) {
     return "";
@@ -69,6 +87,16 @@ function resolveSoundFile(soundFile) {
     return path.join(SOUND_DIR_PATH, soundFile.slice("builtin:".length));
   }
   return soundFile;
+}
+
+function resolveTrayIconFile(iconValue) {
+  if (!iconValue) {
+    return TRAY_ICON_PATH;
+  }
+  if (iconValue.startsWith("builtin:")) {
+    return path.join(TRAY_ICON_DIR_PATH, iconValue.slice("builtin:".length));
+  }
+  return iconValue;
 }
 
 function ensureDir(dirPath) {
@@ -111,6 +139,9 @@ function createRuntime() {
   normalizedConfig.soundFile = DEFAULT_CONFIG.soundFile;
   normalizedConfig.playSoundOnCapture = true;
   normalizedConfig.runOnStartup = true;
+  if (!normalizedConfig.trayIcon || normalizedConfig.trayIcon === "builtin:clipx.ico" || normalizedConfig.trayIcon === "builtin:uninstall.ico" || normalizedConfig.trayIcon === "builtin:tray-icon.png") {
+    normalizedConfig.trayIcon = DEFAULT_CONFIG.trayIcon;
+  }
 
   return {
     dataDir,
@@ -179,6 +210,7 @@ function getPublicState() {
     appName: APP_NAME,
     monitoringPaused: isMonitoringPaused,
     popupScrollEnabled,
+    trayIconOptions: getBuiltinTrayIconOptions(),
     soundOptions: getBuiltinSoundOptions(),
     config: runtime.state.config,
     history: runtime.state.history,
@@ -209,6 +241,7 @@ function syncTrayVisibility() {
       createTray();
       return;
     }
+    tray.setImage(nativeImage.createFromPath(resolveTrayIconFile(runtime.state.config.trayIcon)).resize({ width: 16, height: 16 }));
     refreshTrayMenu();
     return;
   }
@@ -553,7 +586,7 @@ function toggleMonitoring() {
 }
 
 function createTray() {
-  const image = nativeImage.createFromPath(TRAY_ICON_PATH).resize({ width: 16, height: 16 });
+  const image = nativeImage.createFromPath(resolveTrayIconFile(runtime.state.config.trayIcon)).resize({ width: 16, height: 16 });
   tray = new Tray(image);
   tray.setToolTip(APP_NAME);
   tray.on("click", showPopup);
