@@ -22,13 +22,7 @@ ClipX Desktop 是一个面向 Windows 的剪贴板管理工具，灵感来自经
 
 ## 界面预览
 
-设置面板：
-
-![设置面板](docs/settings-panel.png)
-
-快速历史列表：
-
-![快速历史列表](docs/popup-list.png)
+![ClipX Desktop 界面预览](docs/app-preview.png)
 
 ## 开发环境
 
