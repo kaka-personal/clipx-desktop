@@ -8,7 +8,12 @@ const state = {
   currentTab: "settings",
   search: "",
   selectedIds: [],
-  activeClipId: null
+  activeClipId: null,
+  pinnedEditor: {
+    id: null,
+    title: "",
+    text: ""
+  }
 };
 
 function byId(id) {
@@ -37,6 +42,16 @@ function clipSummary(item) {
   return "图像剪贴板";
 }
 
+function popupRowLabel(item) {
+  if (item.type === "image") {
+    return '<span class="popup-kind popup-kind-image">图像</span>';
+  }
+  if (item.type === "files") {
+    return '<span class="popup-kind popup-kind-file">文件</span>';
+  }
+  return "";
+}
+
 function popupSlotLabel(index) {
   return index === 9 ? "(0)" : `(${index + 1})`;
 }
@@ -44,6 +59,11 @@ function popupSlotLabel(index) {
 function pinnedShortcutLabel(index) {
   const digit = index === 9 ? "0" : String(index + 1);
   return `Ctrl+${digit}`;
+}
+
+function findPopupItemById(clipId) {
+  const items = [...(state.app?.history || []), ...(state.app?.pinned || [])];
+  return items.find((item) => item.id === clipId) || null;
 }
 
 function visibleItems() {
@@ -92,6 +112,12 @@ function renderClipCard(item) {
   const pinned = state.app.pinned.some((entry) => entry.id === item.id);
   const pinnedIndex = state.app.pinned.findIndex((entry) => entry.id === item.id);
   const shortcutHint = pinnedIndex > -1 && pinnedIndex < 10 ? ` · ${pinnedShortcutLabel(pinnedIndex)}` : "";
+  const pinnedActions = state.currentTab === "pinned"
+    ? `
+        <button class="ghost-button" data-action="pinned-edit" data-id="${item.id}">编辑</button>
+        <button class="ghost-button" data-action="pinned-remove" data-id="${item.id}">删除</button>
+      `
+    : "";
 
   return `
     <div class="clip-card ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
@@ -106,6 +132,7 @@ function renderClipCard(item) {
         <button class="ghost-button" data-action="copy" data-id="${item.id}">复制并粘贴</button>
         <button class="ghost-button" data-action="toggle-select" data-id="${item.id}">${state.selectedIds.includes(item.id) ? "取消选中" : "加入集合"}</button>
         <button class="ghost-button" data-action="delete" data-id="${item.id}">删除</button>
+        ${pinnedActions}
       </div>
     </div>
   `;
@@ -123,6 +150,31 @@ function renderCollectionCard(collection) {
       <div class="inline-actions">
         <button class="ghost-button" data-action="collection-load" data-id="${collection.id}">加载到历史</button>
         <button class="ghost-button" data-action="collection-remove" data-id="${collection.id}">删除集合</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPinnedEditor() {
+  const isEditing = Boolean(state.pinnedEditor.id);
+  return `
+    <div class="clip-card pinned-editor-card">
+      <div class="clip-card-title">
+        <span>${isEditing ? "编辑常驻片段" : "新建常驻片段"}</span>
+        <span class="muted">${isEditing ? "修改后保存" : "文本常驻"}</span>
+      </div>
+      <div class="field">
+        <label for="pinnedTitle">标题</label>
+        <input id="pinnedTitle" value="${escapeHtml(state.pinnedEditor.title)}" placeholder="例如：邮箱模板">
+      </div>
+      <div class="field">
+        <label for="pinnedText">内容</label>
+        <textarea id="pinnedText" class="pinned-textarea" placeholder="输入常驻内容">${escapeHtml(state.pinnedEditor.text)}</textarea>
+      </div>
+      <div class="clip-actions">
+        <button class="action-button primary" data-action="pinned-save">${isEditing ? "保存修改" : "创建常驻"}</button>
+        <button class="action-button" data-action="pinned-create-from-clipboard">从当前剪贴板创建</button>
+        ${isEditing ? '<button class="action-button" data-action="pinned-cancel-edit">取消编辑</button>' : ""}
       </div>
     </div>
   `;
@@ -164,15 +216,15 @@ function renderPopupList() {
     <div class="main ${scrollClass}">
       <div class="popup-list">
         ${historyItems.map((item, index) => `
-          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
-            <div class="popup-row-text">${escapeHtml(item.title)}</div>
+          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""} ${item.type === "image" ? "popup-row-image" : ""}" data-clip="${item.id}">
+            <div class="popup-row-text">${popupRowLabel(item)}${escapeHtml(item.title)}</div>
             <div class="popup-row-slot">${popupSlotLabel(index)}</div>
           </div>
         `).join("")}
         ${pinnedItems.length ? '<div class="popup-divider"></div>' : ""}
         ${pinnedItems.map((item, index) => `
-          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
-            <div class="popup-row-text">${escapeHtml(item.title)}</div>
+          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""} ${item.type === "image" ? "popup-row-image" : ""}" data-clip="${item.id}">
+            <div class="popup-row-text">${popupRowLabel(item)}${escapeHtml(item.title)}</div>
             <div class="popup-row-slot">${index < 10 ? pinnedShortcutLabel(index) : ""}</div>
           </div>
         `).join("")}
@@ -188,6 +240,15 @@ function renderMain() {
   }
   if (state.currentTab === "settings") {
     return renderSettings();
+  }
+  if (state.currentTab === "pinned") {
+    const items = visibleItems();
+    return `
+      <div class="main">
+        ${renderPinnedEditor()}
+        <div class="list">${items.length ? items.map(renderClipCard).join("") : '<div class="empty">还没有常驻片段。</div>'}</div>
+      </div>
+    `;
   }
   if (state.currentTab === "collections") {
     const collections = visibleItems();
@@ -238,6 +299,14 @@ function readSettingsForm() {
   };
 }
 
+function readPinnedForm() {
+  return {
+    id: state.pinnedEditor.id,
+    title: byId("pinnedTitle")?.value.trim() || "",
+    text: byId("pinnedText")?.value || ""
+  };
+}
+
 async function handleAction(button) {
   const { action, id, value } = button.dataset;
 
@@ -274,6 +343,50 @@ async function handleAction(button) {
     await window.clipx.clearHistory();
   } else if (action === "clear-clipboard") {
     await window.clipx.clearClipboard();
+  } else if (action === "pinned-save") {
+    const payload = readPinnedForm();
+    if (!payload.text.trim()) {
+      window.alert("常驻内容不能为空。");
+      return;
+    }
+    if (payload.id) {
+      const result = await window.clipx.updatePinned(payload);
+      if (!result?.ok) {
+        window.alert("保存失败。");
+        return;
+      }
+    } else {
+      const result = await window.clipx.createPinnedText(payload);
+      if (!result?.ok) {
+        window.alert("创建失败。");
+        return;
+      }
+    }
+    state.pinnedEditor = { id: null, title: "", text: "" };
+  } else if (action === "pinned-create-from-clipboard") {
+    const result = await window.clipx.createPinnedFromClipboard();
+    if (!result?.ok) {
+      window.alert("当前剪贴板没有可用内容。");
+    }
+  } else if (action === "pinned-edit") {
+    const item = (state.app.pinned || []).find((entry) => entry.id === id);
+    if (!item) {
+      return;
+    }
+    state.pinnedEditor = {
+      id,
+      title: item.title || "",
+      text: item.type === "text" ? (item.text || "") : ""
+    };
+    render();
+  } else if (action === "pinned-remove") {
+    await window.clipx.removePinned(id);
+    if (state.pinnedEditor.id === id) {
+      state.pinnedEditor = { id: null, title: "", text: "" };
+    }
+  } else if (action === "pinned-cancel-edit") {
+    state.pinnedEditor = { id: null, title: "", text: "" };
+    render();
   } else if (action === "search-web") {
     await window.clipx.searchWeb(value);
   } else if (action === "open-url") {
@@ -281,6 +394,27 @@ async function handleAction(button) {
   } else if (action === "open-file") {
     await window.clipx.openFile(value);
   }
+}
+
+function showPopupImagePreview(item, anchorEl) {
+  if (!anchorEl || !item || item.type !== "image" || !item.imageDataUrl) {
+    return;
+  }
+  const anchorRect = anchorEl.getBoundingClientRect();
+  window.clipx.showImagePreview({
+    title: item.title,
+    imageDataUrl: item.imageDataUrl,
+    anchorRect: {
+      left: Math.round(window.screenX + anchorRect.left),
+      top: Math.round(window.screenY + anchorRect.top),
+      right: Math.round(window.screenX + anchorRect.right),
+      bottom: Math.round(window.screenY + anchorRect.bottom)
+    }
+  });
+}
+
+function hidePopupImagePreview() {
+  window.clipx.hideImagePreview();
 }
 
 function wireEvents() {
@@ -310,6 +444,19 @@ function wireEvents() {
         window.clipx.selectClip(card.dataset.clip);
       }
     });
+    if (currentView === "popup") {
+      card.addEventListener("mouseenter", () => {
+        const item = findPopupItemById(card.dataset.clip);
+        if (item && item.type === "image") {
+          showPopupImagePreview(item, card);
+        } else {
+          hidePopupImagePreview();
+        }
+      });
+      card.addEventListener("mouseleave", () => {
+        hidePopupImagePreview();
+      });
+    }
   });
 
   document.querySelectorAll("[data-action]").forEach((button) => {
@@ -324,6 +471,9 @@ async function init() {
 
   window.clipx.onStateUpdated((nextState) => {
     state.app = nextState;
+    if (state.currentTab !== "pinned" || !state.pinnedEditor.id) {
+      state.pinnedEditor = state.pinnedEditor.id ? state.pinnedEditor : { id: null, title: "", text: "" };
+    }
     render();
   });
 

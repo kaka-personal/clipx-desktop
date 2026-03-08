@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
 let tray;
 let popupWindow;
 let managerWindow;
+let previewWindow;
 let clipboardInterval;
 let isMonitoringPaused = false;
 let isQuitting = false;
@@ -140,6 +141,12 @@ function notifyWindows() {
   }
   if (managerWindow && !managerWindow.isDestroyed()) {
     managerWindow.webContents.send("state:updated", state);
+  }
+}
+
+function hidePreviewWindow() {
+  if (previewWindow && !previewWindow.isDestroyed()) {
+    previewWindow.hide();
   }
 }
 
@@ -281,6 +288,7 @@ function selectClip(clipId) {
   if (popupWindow && popupWindow.isVisible()) {
     popupWindow.hide();
   }
+  hidePreviewWindow();
   sendPasteKeys();
   notifyWindows();
   return { ok: true };
@@ -300,6 +308,75 @@ function togglePinned(clipId) {
   registerShortcuts();
   refreshTrayMenu();
   notifyWindows();
+}
+
+function createPinnedText(payload) {
+  const text = (payload?.text || "").trim();
+  const title = (payload?.title || "").trim() || truncate(text || "新建常驻片段");
+  if (!text) {
+    return { ok: false, error: "empty_text" };
+  }
+
+  const item = {
+    id: generateId(),
+    type: "text",
+    title,
+    text,
+    createdAt: new Date().toISOString(),
+    formats: ["text/plain"]
+  };
+  runtime.state.pinned.unshift(item);
+  saveState();
+  registerShortcuts();
+  refreshTrayMenu();
+  notifyWindows();
+  return { ok: true, item };
+}
+
+function createPinnedFromClipboard() {
+  const clip = captureClipboardSnapshot();
+  if (!clip) {
+    return { ok: false, error: "empty_clipboard" };
+  }
+  runtime.state.pinned.unshift({ ...clip, id: generateId() });
+  saveState();
+  registerShortcuts();
+  refreshTrayMenu();
+  notifyWindows();
+  return { ok: true };
+}
+
+function updatePinned(payload) {
+  const index = runtime.state.pinned.findIndex((item) => item.id === payload?.id);
+  if (index < 0) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const current = runtime.state.pinned[index];
+  const nextTitle = (payload?.title || "").trim();
+  const nextText = typeof payload?.text === "string" ? payload.text : current.text;
+  if (current.type === "text" && !String(nextText || "").trim()) {
+    return { ok: false, error: "empty_text" };
+  }
+
+  runtime.state.pinned[index] = {
+    ...current,
+    title: nextTitle || current.title,
+    text: current.type === "text" ? nextText : current.text
+  };
+  saveState();
+  refreshTrayMenu();
+  notifyWindows();
+  return { ok: true, item: runtime.state.pinned[index] };
+}
+
+function removePinned(clipId) {
+  runtime.state.pinned = runtime.state.pinned.filter((item) => item.id !== clipId);
+  saveState();
+  registerShortcuts();
+  refreshTrayMenu();
+  notifyWindows();
+  return { ok: true };
 }
 
 function deleteClip(clipId) {
@@ -391,7 +468,23 @@ function createWindows() {
     webPreferences: { preload: path.join(__dirname, "preload.js") }
   });
   popupWindow.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { view: "popup" } });
-  popupWindow.on("blur", () => popupWindow.hide());
+  popupWindow.on("blur", () => {
+    popupWindow.hide();
+    hidePreviewWindow();
+  });
+
+  previewWindow = new BrowserWindow({
+    width: 520,
+    height: 380,
+    frame: false,
+    show: false,
+    resizable: false,
+    skipTaskbar: true,
+    focusable: false,
+    alwaysOnTop: true,
+    webPreferences: { preload: path.join(__dirname, "preload.js") }
+  });
+  previewWindow.loadFile(path.join(__dirname, "renderer", "preview.html"));
 
   managerWindow = new BrowserWindow({
     width: 1140,
@@ -443,6 +536,7 @@ function showPopup() {
   y = Math.max(display.workArea.y + 4, Math.min(y, display.workArea.y + display.workArea.height - height - 4));
 
   popupWindow.setPosition(x, y);
+  hidePreviewWindow();
   popupWindow.show();
   popupWindow.focus();
   popupWindow.webContents.send("state:updated", getPublicState());
@@ -482,6 +576,10 @@ function registerShortcuts() {
 ipcMain.handle("state:get", () => getPublicState());
 ipcMain.handle("clip:select", (_, clipId) => selectClip(clipId));
 ipcMain.handle("clip:pin-toggle", (_, clipId) => togglePinned(clipId));
+ipcMain.handle("pinned:create-text", (_, payload) => createPinnedText(payload));
+ipcMain.handle("pinned:create-from-clipboard", () => createPinnedFromClipboard());
+ipcMain.handle("pinned:update", (_, payload) => updatePinned(payload));
+ipcMain.handle("pinned:remove", (_, clipId) => removePinned(clipId));
 ipcMain.handle("clip:delete", (_, clipId) => deleteClip(clipId));
 ipcMain.handle("history:clear", () => clearHistory());
 ipcMain.handle("clipboard:clear", () => clearClipboard());
@@ -503,6 +601,39 @@ ipcMain.handle("collection:remove", (_, collectionId) => removeCollection(collec
 ipcMain.handle("item:open", (_, value) => shell.openPath(value));
 ipcMain.handle("item:search-web", (_, query) => shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(query)}`));
 ipcMain.handle("item:open-url", (_, url) => shell.openExternal(url));
+ipcMain.on("preview:hide", () => hidePreviewWindow());
+ipcMain.on("preview:show", (_, payload) => {
+  if (!previewWindow || previewWindow.isDestroyed() || !payload || !payload.imageDataUrl || !payload.anchorRect) {
+    return;
+  }
+
+  const width = 520;
+  const height = 380;
+  const point = { x: payload.anchorRect.left, y: payload.anchorRect.top };
+  const display = screen.getDisplayNearestPoint(point);
+  let x = payload.anchorRect.left - width - 12;
+  let y = payload.anchorRect.top;
+
+  if (x < display.workArea.x + 4) {
+    x = payload.anchorRect.right + 12;
+  }
+  if (x + width > display.workArea.x + display.workArea.width - 4) {
+    x = display.workArea.x + display.workArea.width - width - 4;
+  }
+  if (y + height > display.workArea.y + display.workArea.height - 4) {
+    y = display.workArea.y + display.workArea.height - height - 4;
+  }
+  if (y < display.workArea.y + 4) {
+    y = display.workArea.y + 4;
+  }
+
+  previewWindow.setBounds({ x, y, width, height });
+  previewWindow.webContents.send("preview:update", {
+    title: payload.title,
+    imageDataUrl: payload.imageDataUrl
+  });
+  previewWindow.showInactive();
+});
 
 app.whenReady().then(() => {
   app.setAppUserModelId(APP_NAME);

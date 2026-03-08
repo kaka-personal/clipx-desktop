@@ -24,6 +24,7 @@ body.popup-body {
   overflow: hidden;
 }
 button, input, select { font: inherit; }
+textarea { font: inherit; }
 .shell { min-height: 100vh; padding: 18px; }
 .shell.popup { padding: 0; }
 .popup.shell { min-height: auto; }
@@ -52,6 +53,15 @@ button, input, select { font: inherit; }
   border-radius: 12px;
   border: 1px solid var(--line);
   background: white;
+}
+.pinned-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: white;
+  resize: vertical;
 }
 .search { width: 280px; border-radius: 999px; }
 .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 680px; }
@@ -125,6 +135,10 @@ button, input, select { font: inherit; }
   font-size: 11px;
   color: #111;
 }
+.popup-row-image {
+  background: linear-gradient(90deg, rgba(228, 241, 255, 0.95), rgba(237, 237, 237, 0.2) 42%);
+  box-shadow: inset 3px 0 0 #3b82c4;
+}
 .popup-row:last-child {
   border-bottom: 0;
 }
@@ -137,6 +151,25 @@ button, input, select { font: inherit; }
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.popup-kind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.4;
+  vertical-align: 1px;
+}
+.popup-kind-image {
+  color: #0f4b7a;
+  background: #cfe6fb;
+  border: 1px solid #9fc8eb;
+}
+.popup-kind-file {
+  color: #4d4d4d;
+  background: #e4e4e4;
+  border: 1px solid #c9c9c9;
+}
 .popup-row-slot {
   color: #1a3f69;
   text-align: right;
@@ -146,4 +179,32 @@ button, input, select { font: inherit; }
   height: 1px;
   background: #a5a5a5;
   margin: 1px 0 2px;
+}
+.preview-body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+.preview-shell {
+  width: 100vw;
+  height: 100vh;
+  padding: 6px;
+  border: 1px solid #8f8f8f;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+.preview-title {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #4d4d4d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-image {
+  display: block;
+  width: 100%;
+  height: calc(100% - 22px);
+  object-fit: contain;
+  background: #f3f3f3;
 }
