@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("clipx", {
   clearHistory: () => ipcRenderer.invoke("history:clear"),
   clearClipboard: () => ipcRenderer.invoke("clipboard:clear"),
   toggleMonitoring: () => ipcRenderer.invoke("monitoring:toggle"),
+  previewSound: (soundFile) => ipcRenderer.invoke("settings:preview-sound", soundFile),
+  pickSoundFile: () => ipcRenderer.invoke("settings:pick-sound-file"),
   updateSettings: (config) => ipcRenderer.invoke("settings:update", config),
   saveCollection: (payload) => ipcRenderer.invoke("collection:save", payload),
   loadCollection: (collectionId) => ipcRenderer.invoke("collection:load", collectionId),
@@ -27,5 +29,6 @@ contextBridge.exposeInMainWorld("clipx", {
   onFocusSearch: (callback) => ipcRenderer.on("view:focus-search", callback),
   onSelectionActivated: (callback) => ipcRenderer.on("selection:activated", (_, clipId) => callback(clipId)),
   onSetTab: (callback) => ipcRenderer.on("view:set-tab", (_, tab) => callback(tab)),
-  onPreviewUpdate: (callback) => ipcRenderer.on("preview:update", (_, payload) => callback(payload))
+  onPreviewUpdate: (callback) => ipcRenderer.on("preview:update", (_, payload) => callback(payload)),
+  onSoundPlay: (callback) => ipcRenderer.on("sound:play", (_, payload) => callback(payload))
 });

@@ -1,22 +1,31 @@
 ﻿"use strict";
 
-const { app, BrowserWindow, Menu, Tray, clipboard, nativeImage, globalShortcut, ipcMain, shell, screen } = require("electron");
+const { app, BrowserWindow, Menu, Tray, clipboard, nativeImage, globalShortcut, ipcMain, shell, screen, dialog } = require("electron");
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { execFile } = require("child_process");
 
 const APP_NAME = "ClipX Desktop";
 const TRAY_ICON_PATH = path.join(__dirname, "..", "assets", "tray-icon.png");
+const SOUND_DIR_PATH = path.join(__dirname, "..", "assets", "sounds");
 const PINNED_SHORTCUT_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const DEFAULT_CONFIG = {
   maxHistory: 100,
   pollIntervalMs: 500,
   showManagerOnStartup: false,
+  saveHistoryAcrossSessions: true,
+  purgeBitmapEntriesBetweenSessions: false,
   ignoreText: false,
   ignoreImages: false,
   ignoreFiles: false,
   pasteStrategy: "ctrl-v",
   autoPaste: true,
+  clearLastHistoryOnClipboardEmpty: false,
+  playSoundOnCapture: true,
+  soundFile: "builtin:click.wav",
+  showTrayIcon: true,
+  runOnStartup: true,
   hotkeys: {
     togglePopup: "CommandOrControl+Shift+V",
     openManager: "CommandOrControl+Shift+H"
@@ -27,12 +36,40 @@ let tray;
 let popupWindow;
 let managerWindow;
 let previewWindow;
+let soundWindow;
 let clipboardInterval;
 let isMonitoringPaused = false;
 let isQuitting = false;
 let popupScrollEnabled = false;
+let lastClipboardHadContent = false;
+let ignoredClipboardSignature = "";
 let runtime;
 let pluginHost;
+
+function getBuiltinSoundOptions() {
+  if (!fs.existsSync(SOUND_DIR_PATH)) {
+    return [];
+  }
+
+  return fs.readdirSync(SOUND_DIR_PATH)
+    .filter((file) => file.toLowerCase().endsWith(".wav"))
+    .sort((a, b) => a.localeCompare(b))
+    .map((file) => ({
+      value: `builtin:${file}`,
+      label: path.parse(file).name,
+      fileName: file
+    }));
+}
+
+function resolveSoundFile(soundFile) {
+  if (!soundFile) {
+    return "";
+  }
+  if (soundFile.startsWith("builtin:")) {
+    return path.join(SOUND_DIR_PATH, soundFile.slice("builtin:".length));
+  }
+  return soundFile;
+}
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -60,6 +97,21 @@ function createRuntime() {
   ensureDir(collectionsDir);
 
   const persisted = readJson(path.join(dataDir, "state.json"), {});
+  const persistedConfig = persisted.config || {};
+  const normalizedConfig = {
+    ...DEFAULT_CONFIG,
+    ...persistedConfig,
+    hotkeys: {
+      ...DEFAULT_CONFIG.hotkeys,
+      ...(persistedConfig.hotkeys || {})
+    }
+  };
+
+  // Keep these enabled by default for existing installs as requested.
+  normalizedConfig.soundFile = DEFAULT_CONFIG.soundFile;
+  normalizedConfig.playSoundOnCapture = true;
+  normalizedConfig.runOnStartup = true;
+
   return {
     dataDir,
     pluginsDir,
@@ -68,14 +120,7 @@ function createRuntime() {
     lastSignature: "",
     suppressNextPoll: false,
     state: {
-      config: {
-        ...DEFAULT_CONFIG,
-        ...(persisted.config || {}),
-        hotkeys: {
-          ...DEFAULT_CONFIG.hotkeys,
-          ...((persisted.config && persisted.config.hotkeys) || {})
-        }
-      },
+      config: normalizedConfig,
       history: Array.isArray(persisted.history) ? persisted.history : [],
       pinned: Array.isArray(persisted.pinned) ? persisted.pinned : [],
       collections: Array.isArray(persisted.collections) ? persisted.collections : []
@@ -84,7 +129,14 @@ function createRuntime() {
 }
 
 function saveState() {
-  writeJson(runtime.stateFile, runtime.state);
+  const historyToPersist = runtime.state.config.saveHistoryAcrossSessions
+    ? runtime.state.history.filter((item) => !(runtime.state.config.purgeBitmapEntriesBetweenSessions && item.type === "image"))
+    : [];
+
+  writeJson(runtime.stateFile, {
+    ...runtime.state,
+    history: historyToPersist
+  });
 }
 
 function generateId() {
@@ -127,6 +179,7 @@ function getPublicState() {
     appName: APP_NAME,
     monitoringPaused: isMonitoringPaused,
     popupScrollEnabled,
+    soundOptions: getBuiltinSoundOptions(),
     config: runtime.state.config,
     history: runtime.state.history,
     pinned: runtime.state.pinned,
@@ -144,10 +197,52 @@ function notifyWindows() {
   }
 }
 
+function applyLoginItemSettings() {
+  app.setLoginItemSettings({
+    openAtLogin: Boolean(runtime.state.config.runOnStartup)
+  });
+}
+
+function syncTrayVisibility() {
+  if (runtime.state.config.showTrayIcon) {
+    if (!tray || tray.isDestroyed()) {
+      createTray();
+      return;
+    }
+    refreshTrayMenu();
+    return;
+  }
+
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
 function hidePreviewWindow() {
   if (previewWindow && !previewWindow.isDestroyed()) {
     previewWindow.hide();
   }
+}
+
+function playSoundFile(soundFile) {
+  const resolvedPath = resolveSoundFile(soundFile);
+  if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+    return;
+  }
+  if (!soundWindow || soundWindow.isDestroyed()) {
+    return;
+  }
+  soundWindow.webContents.send("sound:play", {
+    soundUrl: pathToFileURL(resolvedPath).href
+  });
+}
+
+function playConfiguredSound() {
+  if (!runtime.state.config.playSoundOnCapture || !runtime.state.config.soundFile) {
+    return;
+  }
+  playSoundFile(runtime.state.config.soundFile);
 }
 
 function createPluginHost() {
@@ -208,6 +303,9 @@ function captureClipboardSnapshot() {
 }
 
 function refreshTrayMenu() {
+  if (!tray || tray.isDestroyed()) {
+    return;
+  }
   const template = [
     { label: "打开设置", click: () => showManager("settings") },
     { label: "打开快速面板", click: showPopup },
@@ -236,18 +334,25 @@ function upsertHistoryItem(clip) {
   if (!signature || signature === runtime.lastSignature) {
     return;
   }
+  if (signature === ignoredClipboardSignature) {
+    ignoredClipboardSignature = "";
+    runtime.lastSignature = signature;
+    return;
+  }
 
   runtime.lastSignature = signature;
   runtime.state.history = runtime.state.history.filter((item) => signatureForClip(item) !== signature);
   runtime.state.history.unshift(clip);
   runtime.state.history = runtime.state.history.slice(0, runtime.state.config.maxHistory);
   pluginHost.runHook("onClipCaptured", { clip, state: getPublicState() });
+  playConfiguredSound();
   saveState();
   refreshTrayMenu();
   notifyWindows();
 }
 
 function writeClipToClipboard(clip) {
+  ignoredClipboardSignature = signatureForClip(clip);
   runtime.suppressNextPoll = true;
   clipboard.clear();
   if (clip.type === "text") {
@@ -486,6 +591,21 @@ function createWindows() {
   });
   previewWindow.loadFile(path.join(__dirname, "renderer", "preview.html"));
 
+  soundWindow = new BrowserWindow({
+    width: 1,
+    height: 1,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    transparent: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      backgroundThrottling: false
+    }
+  });
+  soundWindow.loadFile(path.join(__dirname, "renderer", "sound.html"));
+
   managerWindow = new BrowserWindow({
     width: 1140,
     height: 780,
@@ -555,6 +675,14 @@ function startClipboardMonitor() {
     if (isMonitoringPaused || runtime.suppressNextPoll) {
       return;
     }
+    const hadContent = clipboard.availableFormats().length > 0;
+    if (!hadContent && lastClipboardHadContent && runtime.state.config.clearLastHistoryOnClipboardEmpty) {
+      runtime.state.history = runtime.state.history.slice(1);
+      saveState();
+      refreshTrayMenu();
+      notifyWindows();
+    }
+    lastClipboardHadContent = hadContent;
     const clip = captureClipboardSnapshot();
     if (clip) {
       upsertHistoryItem(clip);
@@ -584,6 +712,20 @@ ipcMain.handle("clip:delete", (_, clipId) => deleteClip(clipId));
 ipcMain.handle("history:clear", () => clearHistory());
 ipcMain.handle("clipboard:clear", () => clearClipboard());
 ipcMain.handle("monitoring:toggle", () => toggleMonitoring());
+ipcMain.handle("settings:preview-sound", (_, soundFile) => {
+  playSoundFile(soundFile || runtime.state.config.soundFile);
+  return { ok: true };
+});
+ipcMain.handle("settings:pick-sound-file", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [{ name: "Wave Files", extensions: ["wav"] }]
+  });
+  if (result.canceled || !result.filePaths.length) {
+    return { canceled: true };
+  }
+  return { canceled: false, path: result.filePaths[0] };
+});
 ipcMain.handle("settings:update", (_, nextConfig) => {
   runtime.state.config = {
     ...runtime.state.config,
@@ -591,6 +733,8 @@ ipcMain.handle("settings:update", (_, nextConfig) => {
     hotkeys: { ...runtime.state.config.hotkeys, ...((nextConfig && nextConfig.hotkeys) || {}) }
   };
   saveState();
+  applyLoginItemSettings();
+  syncTrayVisibility();
   startClipboardMonitor();
   registerShortcuts();
   notifyWindows();
@@ -638,10 +782,15 @@ ipcMain.on("preview:show", (_, payload) => {
 app.whenReady().then(() => {
   app.setAppUserModelId(APP_NAME);
   runtime = createRuntime();
+  saveState();
+  if (runtime.state.config.purgeBitmapEntriesBetweenSessions) {
+    runtime.state.history = runtime.state.history.filter((item) => item.type !== "image");
+  }
   pluginHost = createPluginHost();
   pluginHost.load();
-  createTray();
   createWindows();
+  applyLoginItemSettings();
+  syncTrayVisibility();
   registerShortcuts();
   startClipboardMonitor();
   if (runtime.state.config.showManagerOnStartup) {

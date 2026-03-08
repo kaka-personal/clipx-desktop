@@ -25,7 +25,7 @@ function formatDate(value) {
 }
 
 function escapeHtml(value) {
-  return (value || "")
+  return String(value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -61,6 +61,10 @@ function pinnedShortcutLabel(index) {
   return `Ctrl+${digit}`;
 }
 
+function isBuiltinSoundValue(value) {
+  return typeof value === "string" && value.startsWith("builtin:");
+}
+
 function findPopupItemById(clipId) {
   const items = [...(state.app?.history || []), ...(state.app?.pinned || [])];
   return items.find((item) => item.id === clipId) || null;
@@ -83,6 +87,7 @@ function visibleItems() {
   if (!query) {
     return source;
   }
+
   return source.filter((item) => JSON.stringify(item).toLowerCase().includes(query));
 }
 
@@ -91,9 +96,14 @@ function renderSidebar() {
     <div class="sidebar">
       <p class="section-title">视图</p>
       <div class="tab-list">
-        ${["history", "pinned", "collections", "settings"].map((tab) => `
-          <button class="tab-button ${state.currentTab === tab ? "active" : ""}" data-tab="${tab}">
-            ${tab === "history" ? "历史" : tab === "pinned" ? "常驻片段" : tab === "collections" ? "集合" : "设置"}
+        ${[
+          { id: "history", label: "历史" },
+          { id: "pinned", label: "常驻片段" },
+          { id: "collections", label: "集合" },
+          { id: "settings", label: "设置" }
+        ].map((tab) => `
+          <button class="tab-button ${state.currentTab === tab.id ? "active" : ""}" data-tab="${tab.id}">
+            ${tab.label}
           </button>
         `).join("")}
       </div>
@@ -123,7 +133,7 @@ function renderClipCard(item) {
     <div class="clip-card ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
       <div class="clip-card-title">
         <span>${escapeHtml(item.title)}</span>
-        <span class="muted">${item.type}${shortcutHint}</span>
+        <span class="muted">${escapeHtml(item.type)}${shortcutHint}</span>
       </div>
       <div class="clip-meta">${formatDate(item.createdAt)}</div>
       <div class="clip-body">${clipSummary(item)}</div>
@@ -183,18 +193,65 @@ function renderPinnedEditor() {
 function renderSettings() {
   return `
     <div class="main">
-      <p class="section-title">配置</p>
-      <div class="settings-grid">
-        <div class="field"><label for="maxHistory">历史条目上限</label><input id="maxHistory" type="number" min="10" max="500" value="${state.app.config.maxHistory}"></div>
-        <div class="field"><label for="pollIntervalMs">监听轮询间隔(ms)</label><input id="pollIntervalMs" type="number" min="200" max="2000" step="100" value="${state.app.config.pollIntervalMs}"></div>
-        <div class="field"><label for="pasteStrategy">粘贴方式</label><select id="pasteStrategy"><option value="ctrl-v" ${state.app.config.pasteStrategy === "ctrl-v" ? "selected" : ""}>Ctrl+V</option><option value="shift-insert" ${state.app.config.pasteStrategy === "shift-insert" ? "selected" : ""}>Shift+Insert</option></select></div>
-        <div class="field"><label for="togglePopupKey">快速面板热键</label><input id="togglePopupKey" value="${state.app.config.hotkeys.togglePopup}"></div>
-        <div class="field"><label for="openManagerKey">管理器热键</label><input id="openManagerKey" value="${state.app.config.hotkeys.openManager}"></div>
+      <p class="section-title">通用</p>
+      <div class="settings-panel">
+        <div class="settings-row remember-row">
+          <label class="settings-inline" for="maxHistory">
+            <span>记住最近</span>
+            <input id="maxHistory" type="number" min="4" max="1024" value="${state.app.config.maxHistory}">
+            <span>条剪贴板记录（4-1024）</span>
+          </label>
+        </div>
+        <label class="settings-check"><input id="saveHistoryAcrossSessions" type="checkbox" ${state.app.config.saveHistoryAcrossSessions ? "checked" : ""}> 跨会话保存历史记录</label>
+        <label class="settings-check nested"><input id="purgeBitmapEntriesBetweenSessions" type="checkbox" ${state.app.config.purgeBitmapEntriesBetweenSessions ? "checked" : ""}> 会话之间清除图片条目</label>
+        <label class="settings-check"><input id="ignoreText" type="checkbox" ${state.app.config.ignoreText ? "checked" : ""}> 忽略文本剪贴板条目</label>
+        <label class="settings-check"><input id="ignoreImages" type="checkbox" ${state.app.config.ignoreImages ? "checked" : ""}> 忽略图片剪贴板条目</label>
+        <label class="settings-check"><input id="ignoreFiles" type="checkbox" ${state.app.config.ignoreFiles ? "checked" : ""}> 忽略文件列表剪贴板条目</label>
+        <div class="settings-row">
+          <span class="settings-label">粘贴方式：</span>
+          <label class="settings-radio"><input type="radio" name="pasteStrategy" value="ctrl-v" ${state.app.config.pasteStrategy === "ctrl-v" ? "checked" : ""}> Ctrl+V</label>
+          <label class="settings-radio"><input type="radio" name="pasteStrategy" value="shift-insert" ${state.app.config.pasteStrategy === "shift-insert" ? "checked" : ""}> Shift+INS</label>
+        </div>
+        <label class="settings-check"><input id="clearLastHistoryOnClipboardEmpty" type="checkbox" ${state.app.config.clearLastHistoryOnClipboardEmpty ? "checked" : ""}> 剪贴板被清空时删除最后一条历史</label>
+        <label class="settings-check"><input id="playSoundOnCapture" type="checkbox" ${state.app.config.playSoundOnCapture ? "checked" : ""}> 记录新条目时播放提示音</label>
+        <div class="settings-row sound-row-wrap">
+          <label class="settings-label" for="soundPreset">声音文件：</label>
+        </div>
+        <div class="settings-row sound-row">
+          <select id="soundPreset">
+            <option value="">不使用内置声音</option>
+            ${(state.app.soundOptions || []).map((option) => `
+              <option value="${escapeHtml(option.value)}" ${state.app.config.soundFile === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>
+            `).join("")}
+            ${state.app.config.soundFile && !isBuiltinSoundValue(state.app.config.soundFile)
+              ? `<option value="__custom__" selected>自定义文件</option>`
+              : '<option value="__custom__">自定义文件</option>'}
+          </select>
+          <button class="action-button sound-button" data-action="preview-sound">播放</button>
+          <button class="action-button sound-button" data-action="pick-sound-file">...</button>
+        </div>
+        <div class="settings-row">
+          <input id="soundFileCustom" type="text" value="${escapeHtml(isBuiltinSoundValue(state.app.config.soundFile) ? "" : (state.app.config.soundFile || ""))}" placeholder="自定义 wav 文件路径">
+        </div>
+        <label class="settings-check"><input id="showTrayIcon" type="checkbox" ${state.app.config.showTrayIcon ? "checked" : ""}> 在系统托盘显示图标</label>
+        <label class="settings-check"><input id="runOnStartup" type="checkbox" ${state.app.config.runOnStartup ? "checked" : ""}> 开机启动 ClipX</label>
       </div>
-      <div class="inline-actions">
-        <label><input id="ignoreText" type="checkbox" ${state.app.config.ignoreText ? "checked" : ""}> 忽略文本</label>
-        <label><input id="ignoreImages" type="checkbox" ${state.app.config.ignoreImages ? "checked" : ""}> 忽略图像</label>
-        <label><input id="ignoreFiles" type="checkbox" ${state.app.config.ignoreFiles ? "checked" : ""}> 忽略文件</label>
+      <p class="section-title">高级</p>
+      <div class="settings-grid">
+        <div class="field">
+          <label for="pollIntervalMs">监听轮询间隔（ms）</label>
+          <input id="pollIntervalMs" type="number" min="200" max="2000" step="100" value="${state.app.config.pollIntervalMs}">
+        </div>
+        <div class="field">
+          <label for="togglePopupKey">快速面板热键</label>
+          <input id="togglePopupKey" value="${escapeHtml(state.app.config.hotkeys.togglePopup)}">
+        </div>
+        <div class="field">
+          <label for="openManagerKey">管理器热键</label>
+          <input id="openManagerKey" value="${escapeHtml(state.app.config.hotkeys.openManager)}">
+        </div>
+      </div>
+      <div class="inline-actions settings-inline-actions">
         <label><input id="autoPaste" type="checkbox" ${state.app.config.autoPaste ? "checked" : ""}> 选择后自动粘贴</label>
       </div>
       <div class="clip-actions" style="margin-top:18px;">
@@ -238,9 +295,11 @@ function renderMain() {
   if (currentView === "popup") {
     return renderPopupList();
   }
+
   if (state.currentTab === "settings") {
     return renderSettings();
   }
+
   if (state.currentTab === "pinned") {
     const items = visibleItems();
     return `
@@ -250,9 +309,17 @@ function renderMain() {
       </div>
     `;
   }
+
   if (state.currentTab === "collections") {
     const collections = visibleItems();
-    return `<div class="main"><div class="clip-actions" style="margin-bottom:18px;"><button class="action-button primary" data-action="save-collection">将已选条目保存为集合</button></div><div class="list">${collections.length ? collections.map(renderCollectionCard).join("") : '<div class="empty">还没有保存的集合。</div>'}</div></div>`;
+    return `
+      <div class="main">
+        <div class="clip-actions" style="margin-bottom:18px;">
+          <button class="action-button primary" data-action="save-collection">将已选条目保存为集合</button>
+        </div>
+        <div class="list">${collections.length ? collections.map(renderCollectionCard).join("") : '<div class="empty">还没有保存的集合。</div>'}</div>
+      </div>
+    `;
   }
 
   const items = visibleItems();
@@ -272,7 +339,7 @@ function render() {
     <div class="shell ${currentView === "popup" ? "popup" : ""}">
       <div class="chrome">
         <div class="topbar">
-          <div class="brand"><strong>${state.app.appName}</strong><span>ClipX 风格的 Windows 剪贴板管理器</span></div>
+          <div class="brand"><strong>${escapeHtml(state.app.appName)}</strong><span>ClipX 风格的 Windows 剪贴板管理器</span></div>
           <div class="toolbar"><input id="searchInput" class="search" placeholder="搜索历史、文件名或文本片段" value="${escapeHtml(state.search)}"></div>
         </div>
         <div class="layout">${currentView === "popup" ? "" : renderSidebar()}${renderMain()}</div>
@@ -284,14 +351,24 @@ function render() {
 }
 
 function readSettingsForm() {
+  const selectedPaste = document.querySelector('input[name="pasteStrategy"]:checked');
+  const soundPreset = byId("soundPreset").value;
+  const soundFileCustom = byId("soundFileCustom").value.trim();
   return {
     maxHistory: Number(byId("maxHistory").value),
     pollIntervalMs: Number(byId("pollIntervalMs").value),
-    pasteStrategy: byId("pasteStrategy").value,
+    saveHistoryAcrossSessions: byId("saveHistoryAcrossSessions").checked,
+    purgeBitmapEntriesBetweenSessions: byId("purgeBitmapEntriesBetweenSessions").checked,
     ignoreText: byId("ignoreText").checked,
     ignoreImages: byId("ignoreImages").checked,
     ignoreFiles: byId("ignoreFiles").checked,
+    pasteStrategy: selectedPaste ? selectedPaste.value : "ctrl-v",
     autoPaste: byId("autoPaste").checked,
+    clearLastHistoryOnClipboardEmpty: byId("clearLastHistoryOnClipboardEmpty").checked,
+    playSoundOnCapture: byId("playSoundOnCapture").checked,
+    soundFile: soundPreset && soundPreset !== "__custom__" ? soundPreset : soundFileCustom,
+    showTrayIcon: byId("showTrayIcon").checked,
+    runOnStartup: byId("runOnStartup").checked,
     hotkeys: {
       togglePopup: byId("togglePopupKey").value.trim(),
       openManager: byId("openManagerKey").value.trim()
@@ -337,6 +414,19 @@ async function handleAction(button) {
     await window.clipx.removeCollection(id);
   } else if (action === "save-settings") {
     await window.clipx.updateSettings(readSettingsForm());
+  } else if (action === "preview-sound") {
+    const settings = readSettingsForm();
+    if (!settings.soundFile) {
+      window.alert("先选择一个声音文件。");
+      return;
+    }
+    await window.clipx.previewSound(settings.soundFile);
+  } else if (action === "pick-sound-file") {
+    const result = await window.clipx.pickSoundFile();
+    if (!result?.canceled && result?.path) {
+      byId("soundPreset").value = "__custom__";
+      byId("soundFileCustom").value = result.path;
+    }
   } else if (action === "toggle-monitoring") {
     await window.clipx.toggleMonitoring();
   } else if (action === "clear-history") {
@@ -417,6 +507,15 @@ function hidePopupImagePreview() {
   window.clipx.hideImagePreview();
 }
 
+function syncSoundControls() {
+  const preset = byId("soundPreset");
+  const customInput = byId("soundFileCustom");
+  if (!preset || !customInput) {
+    return;
+  }
+  customInput.disabled = preset.value !== "__custom__";
+}
+
 function wireEvents() {
   const input = byId("searchInput");
   if (input && currentView !== "popup") {
@@ -444,6 +543,7 @@ function wireEvents() {
         window.clipx.selectClip(card.dataset.clip);
       }
     });
+
     if (currentView === "popup") {
       card.addEventListener("mouseenter", () => {
         const item = findPopupItemById(card.dataset.clip);
@@ -462,6 +562,14 @@ function wireEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleAction(button));
   });
+
+  const soundPreset = byId("soundPreset");
+  if (soundPreset) {
+    soundPreset.addEventListener("change", () => {
+      syncSoundControls();
+    });
+    syncSoundControls();
+  }
 }
 
 async function init() {
@@ -471,8 +579,8 @@ async function init() {
 
   window.clipx.onStateUpdated((nextState) => {
     state.app = nextState;
-    if (state.currentTab !== "pinned" || !state.pinnedEditor.id) {
-      state.pinnedEditor = state.pinnedEditor.id ? state.pinnedEditor : { id: null, title: "", text: "" };
+    if (!state.pinnedEditor.id) {
+      state.pinnedEditor = { id: null, title: "", text: "" };
     }
     render();
   });
