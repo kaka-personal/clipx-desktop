@@ -4,6 +4,15 @@ ClipX Desktop 是一个面向 Windows 的剪贴板管理工具，灵感来自经
 
 本项目的目标不是逐字节复刻老版 ClipX，而是在现代 Windows 环境下提供接近 ClipX 使用体验的开源实现。
 
+## 下载
+
+- Releases 页面：
+  [https://github.com/kaka-personal/clipx-desktop/releases](https://github.com/kaka-personal/clipx-desktop/releases)
+- 推荐下载：
+  `ClipX-Desktop-Setup-0.1.0.exe`
+- 便携版：
+  `ClipX-Desktop-0.1.0-Portable.exe`
+
 ## 特性
 
 - 托盘常驻
@@ -52,6 +61,11 @@ npm run dist
 ```
 
 打包产物默认输出到 `dist/`。
+
+## GitHub Release 建议上传的文件
+
+- `ClipX-Desktop-Setup-0.1.0.exe`
+- `ClipX-Desktop-0.1.0-Portable.exe`
 
 ## 默认热键
 
