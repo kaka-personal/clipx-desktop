@@ -7,6 +7,8 @@ const { pathToFileURL } = require("url");
 const { execFile } = require("child_process");
 
 const APP_NAME = "ClipX Desktop";
+const APP_ID = "com.kaka.clipxdesktop";
+const APP_ICON_PATH = path.join(__dirname, "..", "assets", "app-icon.png");
 const TRAY_ICON_PATH = path.join(__dirname, "..", "assets", "tray-icon.png");
 const TRAY_ICON_DIR_PATH = path.join(__dirname, "..", "assets", "tray-icons");
 const SOUND_DIR_PATH = path.join(__dirname, "..", "assets", "sounds");
@@ -612,6 +614,7 @@ function createWindows() {
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
+    icon: APP_ICON_PATH,
     webPreferences: { preload: path.join(__dirname, "preload.js") }
   });
   popupWindow.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { view: "popup" } });
@@ -629,6 +632,7 @@ function createWindows() {
     skipTaskbar: true,
     focusable: false,
     alwaysOnTop: true,
+    icon: APP_ICON_PATH,
     webPreferences: { preload: path.join(__dirname, "preload.js") }
   });
   previewWindow.loadFile(path.join(__dirname, "renderer", "preview.html"));
@@ -641,6 +645,7 @@ function createWindows() {
     resizable: false,
     skipTaskbar: true,
     transparent: true,
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       backgroundThrottling: false
@@ -653,6 +658,7 @@ function createWindows() {
     height: 780,
     show: false,
     autoHideMenuBar: true,
+    icon: APP_ICON_PATH,
     webPreferences: { preload: path.join(__dirname, "preload.js") }
   });
   managerWindow.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { view: "manager" } });
@@ -822,7 +828,7 @@ ipcMain.on("preview:show", (_, payload) => {
 });
 
 app.whenReady().then(() => {
-  app.setAppUserModelId(APP_NAME);
+  app.setAppUserModelId(APP_ID);
   runtime = createRuntime();
   saveState();
   if (runtime.state.config.purgeBitmapEntriesBetweenSessions) {

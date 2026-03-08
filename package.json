@@ -6,16 +6,19 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win portable",
+    "dist:setup": "electron-builder --win nsis"
   },
   "license": "MIT",
   "devDependencies": {
     "electron": "^36.0.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "rcedit": "^5.0.2"
   },
   "build": {
     "appId": "com.kaka.clipxdesktop",
     "productName": "ClipX Desktop",
+    "afterPack": "build/afterPack.js",
     "directories": {
       "output": "dist"
     },
@@ -27,14 +30,30 @@
     "asar": true,
     "win": {
       "signAndEditExecutable": false,
+      "icon": "assets/app-icon.ico",
+      "executableName": "ClipX-Desktop",
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "x64"
           ]
         }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "shortcutName": "ClipX Desktop",
+      "uninstallDisplayName": "ClipX Desktop",
+      "installerIcon": "assets/app-icon.ico",
+      "uninstallerIcon": "assets/app-icon.ico",
+      "installerHeaderIcon": "assets/app-icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "ClipX-Desktop-Setup-${version}.${ext}"
     },
     "portable": {
       "artifactName": "ClipX-Desktop-${version}-Portable.${ext}"
