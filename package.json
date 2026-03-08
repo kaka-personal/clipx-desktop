@@ -1,0 +1,13 @@
+{
+  "name": "clipx-desktop",
+  "version": "0.1.0",
+  "description": "A ClipX-inspired clipboard manager for Windows.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^36.0.0"
+  }
+}
