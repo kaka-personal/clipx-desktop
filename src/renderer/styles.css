@@ -246,7 +246,7 @@ textarea { font: inherit; }
   color: #ffffff;
 }
 .popup-row-text {
-  font-weight: 600;
+  font-weight: 400;
   font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
   overflow: hidden;
   white-space: nowrap;
