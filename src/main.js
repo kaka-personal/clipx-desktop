@@ -607,7 +607,7 @@ function createTray() {
 
 function createWindows() {
   popupWindow = new BrowserWindow({
-    width: 500,
+    width: 400,
     height: 200,
     frame: false,
     show: false,
@@ -684,7 +684,7 @@ function showPopup() {
   const maxHeight = display.workArea.height - 12;
   popupScrollEnabled = contentHeight > maxHeight;
   const height = Math.max(80, Math.min(contentHeight, maxHeight));
-  const width = 500;
+  const width = 400;
 
   popupWindow.setSize(width, height, false);
 

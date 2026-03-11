@@ -231,24 +231,23 @@ textarea { font: inherit; }
   gap: 6px;
   align-items: center;
   min-height: 22px;
-  padding: 0 6px;
+  padding: 0 20px;
   border-bottom: 0;
   cursor: pointer;
   font-size: 11px;
   color: #111;
-}
-.popup-row-image {
-  background: linear-gradient(90deg, rgba(228, 241, 255, 0.95), rgba(237, 237, 237, 0.2) 42%);
-  box-shadow: inset 3px 0 0 #3b82c4;
 }
 .popup-row:last-child {
   border-bottom: 0;
 }
 .popup-row:hover,
 .popup-row.active {
-  background: #dbe8fb;
+  background: #2085EE;
+  color: #ffffff;
 }
 .popup-row-text {
+  font-weight: 600;
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -262,11 +261,6 @@ textarea { font: inherit; }
   line-height: 1.4;
   vertical-align: 1px;
 }
-.popup-kind-image {
-  color: #0f4b7a;
-  background: #cfe6fb;
-  border: 1px solid #9fc8eb;
-}
 .popup-kind-file {
   color: #4d4d4d;
   background: #e4e4e4;
@@ -276,6 +270,10 @@ textarea { font: inherit; }
   color: #1a3f69;
   text-align: right;
   font-weight: 600;
+}
+.popup-row:hover .popup-row-slot,
+.popup-row.active .popup-row-slot {
+  color: #eaf2ff;
 }
 .popup-divider {
   height: 1px;

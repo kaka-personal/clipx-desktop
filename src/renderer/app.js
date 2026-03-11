@@ -45,7 +45,7 @@ function clipSummary(item) {
 
 function popupRowLabel(item) {
   if (item.type === "image") {
-    return '<span class="popup-kind popup-kind-image">图像</span>';
+    return "";
   }
   if (item.type === "files") {
     return '<span class="popup-kind popup-kind-file">文件</span>';
@@ -298,14 +298,14 @@ function renderPopupList() {
     <div class="main ${scrollClass}">
       <div class="popup-list">
         ${historyItems.map((item, index) => `
-          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""} ${item.type === "image" ? "popup-row-image" : ""}" data-clip="${item.id}">
+          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
             <div class="popup-row-text">${popupRowLabel(item)}${escapeHtml(item.title)}</div>
             <div class="popup-row-slot">${popupSlotLabel(index)}</div>
           </div>
         `).join("")}
         ${pinnedItems.length ? '<div class="popup-divider"></div>' : ""}
         ${pinnedItems.map((item, index) => `
-          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""} ${item.type === "image" ? "popup-row-image" : ""}" data-clip="${item.id}">
+          <div class="popup-row ${state.activeClipId === item.id ? "active" : ""}" data-clip="${item.id}">
             <div class="popup-row-text">${popupRowLabel(item)}${escapeHtml(item.title)}</div>
             <div class="popup-row-slot">${index < 10 ? pinnedShortcutLabel(index) : ""}</div>
           </div>
