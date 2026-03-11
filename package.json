@@ -1,6 +1,6 @@
 {
   "name": "clipx-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A ClipX-inspired clipboard manager for Windows.",
   "author": "Kaka",
   "main": "src/main.js",
