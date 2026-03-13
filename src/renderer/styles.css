@@ -82,6 +82,7 @@ textarea { font: inherit; }
 .sidebar { padding: 18px; border-right: 1px solid var(--line); }
 .main { padding: 18px; }
 .tab-list, .list { display: grid; gap: 10px; }
+.list { background: red; }
 .tab-button, .action-button, .ghost-button {
   border: 1px solid var(--line);
   border-radius: 12px;
